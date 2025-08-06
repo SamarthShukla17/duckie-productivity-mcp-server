@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Wrangler
+.wrangler/
+dist/
+
+# Environment files
+.env
+.dev.vars
+
+# Database migrations
+drizzle/
+
+# Logs
+*.log
+
+# OS generated files
+.DS_Store
+Thumbs.db
