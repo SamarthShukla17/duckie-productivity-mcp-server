@@ -1,0 +1,33 @@
+{
+  "name": "duckie-productivity-mcp-server",
+  "version": "1.0.0",
+  "description": "🦆 AI-powered productivity MCP server with rubber duck debugging, task management, and Spotify integration",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "wrangler d1 migrations apply duckie-db"
+  },
+  "keywords": [
+    "mcp",
+    "productivity", 
+    "cloudflare-workers",
+    "ai",
+    "rubber-duck-debugging",
+    "vibe-summer-challenge"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "@hono/mcp": "^0.0.3",
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "drizzle-orm": "^0.36.4",
+    "hono": "^4.6.11"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241218.0",
+    "drizzle-kit": "^0.30.1",
+    "wrangler": "^3.94.0"
+  }
+}
