@@ -1,0 +1,19 @@
+name = "duckie-productivity-mcp-server"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+[ai]
+binding = "AI"
+[[d1_databases]]
+binding = "DB"
+database_name = "duckie-db"
+database_id = "your-database-id-here"
+[vars]
+NODE_ENV = "production"
+3. drizzle.config.ts
+import type { Config } from "drizzle-kit";
+export default {
+  schema: "./src/db/schema.ts",
+  out: "./drizzle",
+  dialect: "sqlite",
+  driver: "d1-http",
+} satisfies Config;
