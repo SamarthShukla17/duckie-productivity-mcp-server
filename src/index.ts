@@ -30,6 +30,77 @@ const getRandomDuckResponse = (type: keyof typeof duckResponses) => {
   return responses[Math.floor(Math.random() * responses.length)];
 };
 
+// GitHub API helper functions
+async function parseGitHubUrl(url: string): Promise<{ owner: string; repo: string; path?: string } | null> {
+  const patterns = [
+    /github\.com\/([^\/]+)\/([^\/]+)(?:\/blob\/[^\/]+\/(.+))?/,
+    /github\.com\/([^\/]+)\/([^\/]+)(?:\/tree\/[^\/]+\/(.+))?/,
+    /github\.com\/([^\/]+)\/([^\/]+)\/?$/
+  ];
+  
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) {
+      return {
+        owner: match[1],
+        repo: match[2].replace(/\.git$/, ''),
+        path: match[3] || undefined
+      };
+    }
+  }
+  return null;
+}
+
+async function fetchGitHubFile(owner: string, repo: string, path: string): Promise<string | null> {
+  try {
+    const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`, {
+      headers: {
+        'Accept': 'application/vnd.github.v3+json',
+        'User-Agent': 'Duckie-Productivity-MCP-Server'
+      }
+    });
+    
+    if (!response.ok) {
+      return null;
+    }
+    
+    const data = await response.json() as { content: string; encoding: string };
+    
+    if (data.encoding === 'base64') {
+      return atob(data.content.replace(/\n/g, ''));
+    }
+    
+    return data.content;
+  } catch (error) {
+    console.error('GitHub API error:', error);
+    return null;
+  }
+}
+
+async function analyzeCodeWithAI(code: string, filename: string, issueDescription: string, ai: Ai): Promise<string> {
+  try {
+    const response = await ai.run('@cf/meta/llama-3.1-8b-instruct', {
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a helpful rubber duck debugging assistant with a friendly, encouraging duck personality. Analyze code for bugs, issues, and improvements. Provide clear, step-by-step debugging advice with duck-themed expressions like "Quack!", "Let\'s dive in!", and "You\'ve got this, fellow developer!". Include practical solutions and explain the reasoning behind your suggestions.'
+        },
+        {
+          role: 'user',
+          content: `Please analyze this ${filename} file for issues. ${issueDescription ? `The reported issue is: ${issueDescription}` : 'Look for potential bugs, code smells, and improvements.'}\n\nCode:\n\`\`\`\n${code}\n\`\`\``
+        }
+      ],
+      max_tokens: 1024,
+      temperature: 0.7,
+    });
+
+    return response.response || 'Quack! I couldn\'t analyze the code right now, but don\'t worry - every duck faces challenges! Try breaking down your problem into smaller parts.';
+  } catch (error) {
+    console.error('Cloudflare AI error:', error);
+    return 'Quack! I\'m having trouble connecting to my AI brain right now, but that doesn\'t stop a good rubber duck session! Try explaining your problem step by step - sometimes talking through it reveals the solution!';
+  }
+}
+
 // Cloudflare Workers AI helper function
 async function getAIDebuggingHelp(problemDescription: string, ai: Ai): Promise<string> {
   try {
@@ -491,6 +562,116 @@ function createMcpServer(env: Bindings) {
     }
   );
 
+  // GitHub Repository Analysis Tool
+  server.tool(
+    "analyze_github_repo",
+    {
+      github_url: z.string().describe("GitHub repository URL or specific file URL"),
+      issue_description: z.string().optional().describe("Optional description of the specific issue you're facing"),
+      focus_files: z.array(z.string()).optional().describe("Optional array of specific file paths to analyze")
+    },
+    async ({ github_url, issue_description, focus_files }) => {
+      try {
+        const parsedUrl = await parseGitHubUrl(github_url);
+        if (!parsedUrl) {
+          return {
+            content: [{
+              type: "text",
+              text: `${getRandomDuckResponse('error')} Quack! That doesn't look like a valid GitHub URL. Please provide a URL like: https://github.com/owner/repo or https://github.com/owner/repo/blob/main/file.js`
+            }],
+            isError: true
+          };
+        }
+
+        const { owner, repo, path } = parsedUrl;
+        let analysisResults: string[] = [];
+
+        // If specific file path in URL, analyze that file
+        if (path) {
+          const fileContent = await fetchGitHubFile(owner, repo, path);
+          if (fileContent) {
+            const analysis = await analyzeCodeWithAI(fileContent, path, issue_description || '', env.AI);
+            analysisResults.push(`**Analysis of ${path}:**\n${analysis}`);
+          } else {
+            return {
+              content: [{
+                type: "text",
+                text: `${getRandomDuckResponse('error')} Quack! I couldn't fetch the file ${path}. Make sure it exists and is accessible!`
+              }],
+              isError: true
+            };
+          }
+        }
+        // If focus_files specified, analyze those
+        else if (focus_files && focus_files.length > 0) {
+          for (const filePath of focus_files.slice(0, 5)) { // Limit to 5 files
+            const fileContent = await fetchGitHubFile(owner, repo, filePath);
+            if (fileContent) {
+              const analysis = await analyzeCodeWithAI(fileContent, filePath, issue_description || '', env.AI);
+              analysisResults.push(`**Analysis of ${filePath}:**\n${analysis}`);
+            } else {
+              analysisResults.push(`**${filePath}:** Could not fetch this file - it may not exist or be inaccessible.`);
+            }
+          }
+        }
+        // Otherwise, analyze common files in the repository
+        else {
+          const commonFiles = [
+            'package.json',
+            'src/index.js',
+            'src/index.ts',
+            'src/App.js',
+            'src/App.tsx',
+            'index.js',
+            'index.ts',
+            'main.js',
+            'main.ts',
+            'README.md'
+          ];
+
+          let filesAnalyzed = 0;
+          for (const filePath of commonFiles) {
+            if (filesAnalyzed >= 3) break; // Limit to 3 files for performance
+            
+            const fileContent = await fetchGitHubFile(owner, repo, filePath);
+            if (fileContent) {
+              const analysis = await analyzeCodeWithAI(fileContent, filePath, issue_description || '', env.AI);
+              analysisResults.push(`**Analysis of ${filePath}:**\n${analysis}`);
+              filesAnalyzed++;
+            }
+          }
+
+          if (filesAnalyzed === 0) {
+            return {
+              content: [{
+                type: "text",
+                text: `${getRandomDuckResponse('error')} Quack! I couldn't find any common files to analyze in this repository. Try specifying specific files with the focus_files parameter!`
+              }],
+              isError: true
+            };
+          }
+        }
+
+        const fullAnalysis = analysisResults.join('\n\n---\n\n');
+        
+        return {
+          content: [{
+            type: "text",
+            text: `🦆 **GitHub Repository Analysis Complete!**\n\n**Repository:** ${owner}/${repo}\n${issue_description ? `**Issue:** ${issue_description}\n` : ''}\n---\n\n${fullAnalysis}\n\n---\n\n${getRandomDuckResponse('success')} Hope this helps you debug like a pro! Remember, every great developer needs a rubber duck! 🦆`
+          }]
+        };
+      } catch (error) {
+        return {
+          content: [{
+            type: "text",
+            text: `${getRandomDuckResponse('error')} Failed to analyze GitHub repository: ${error instanceof Error ? error.message : 'Unknown error'}`
+          }],
+          isError: true
+        };
+      }
+    }
+  );
+
   return server;
 }
 
@@ -504,9 +685,89 @@ app.get("/", (c) => {
       tasks: "/api/tasks",
       debug: "/api/debug",
       focus: "/api/focus",
-      spotify: "/api/spotify"
+      spotify: "/api/spotify",
+      github: "/api/github"
     }
   });
+});
+
+// GitHub Analysis API Routes
+app.post("/api/github/analyze", async (c) => {
+  const { github_url, issue_description, focus_files } = await c.req.json();
+
+  if (!github_url) {
+    return c.json({
+      error: `${getRandomDuckResponse('error')} GitHub URL is required!`,
+      success: false
+    }, 400);
+  }
+
+  try {
+    const parsedUrl = await parseGitHubUrl(github_url);
+    if (!parsedUrl) {
+      return c.json({
+        error: `${getRandomDuckResponse('error')} Invalid GitHub URL format!`,
+        success: false
+      }, 400);
+    }
+
+    const { owner, repo, path } = parsedUrl;
+    let analysisResults: string[] = [];
+
+    // If specific file path in URL, analyze that file
+    if (path) {
+      const fileContent = await fetchGitHubFile(owner, repo, path);
+      if (fileContent) {
+        const analysis = await analyzeCodeWithAI(fileContent, path, issue_description || '', c.env.AI);
+        analysisResults.push(`**Analysis of ${path}:**\n${analysis}`);
+      } else {
+        return c.json({
+          error: `${getRandomDuckResponse('error')} Could not fetch file: ${path}`,
+          success: false
+        }, 404);
+      }
+    }
+    // If focus_files specified, analyze those
+    else if (focus_files && focus_files.length > 0) {
+      for (const filePath of focus_files.slice(0, 5)) {
+        const fileContent = await fetchGitHubFile(owner, repo, filePath);
+        if (fileContent) {
+          const analysis = await analyzeCodeWithAI(fileContent, filePath, issue_description || '', c.env.AI);
+          analysisResults.push(`**Analysis of ${filePath}:**\n${analysis}`);
+        }
+      }
+    }
+    // Otherwise, analyze common files
+    else {
+      const commonFiles = ['package.json', 'src/index.js', 'src/index.ts', 'src/App.js', 'src/App.tsx', 'index.js', 'index.ts'];
+      let filesAnalyzed = 0;
+      
+      for (const filePath of commonFiles) {
+        if (filesAnalyzed >= 3) break;
+        const fileContent = await fetchGitHubFile(owner, repo, filePath);
+        if (fileContent) {
+          const analysis = await analyzeCodeWithAI(fileContent, filePath, issue_description || '', c.env.AI);
+          analysisResults.push(`**Analysis of ${filePath}:**\n${analysis}`);
+          filesAnalyzed++;
+        }
+      }
+    }
+
+    return c.json({
+      message: `${getRandomDuckResponse('success')} GitHub repository analysis complete!`,
+      repository: `${owner}/${repo}`,
+      issue_description,
+      analysis: analysisResults.join('\n\n---\n\n'),
+      encouragement: `${getRandomDuckResponse('encouragement')} Happy debugging!`,
+      success: true
+    });
+
+  } catch (error) {
+    return c.json({
+      error: `${getRandomDuckResponse('error')} Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      success: false
+    }, 500);
+  }
 });
 
 // Task Management API Routes
