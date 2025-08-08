@@ -1,223 +1,205 @@
 # Duckie Productivity MCP Server Specification
 
-This document outlines the design and implementation plan for a comprehensive productivity MCP server with a delightful duck personality. The server provides rubber duck debugging with AI assistance, task management, focus timer functionality, and Spotify integration for enhanced productivity.
+This document outlines the design and implementation plan for a Duckie Productivity MCP server that provides rubber duck debugging, task management, focus timer functionality, **GitHub repository analysis**, and Spotify integration with a friendly duck personality.
 
-The system will support AI-powered debugging sessions, CRUD task management, focus timers with motivational messages, and Spotify music control - all delivered with encouraging duck-themed responses and personality.
+The server will support AI-powered debugging conversations, task CRUD operations with duck-themed responses, focus timer sessions with motivational messages, **GitHub code analysis with AI insights**, and Spotify music control. All interactions will maintain a cheerful, encouraging duck persona.
 
-The system will be built using Cloudflare Workers with Hono as the API framework, Cloudflare D1 for data persistence, Drizzle ORM for database operations, Cloudflare Workers AI for AI assistance, and Spotify Web API for music integration.
+The system will be built using Cloudflare Workers with Hono as the API framework, Cloudflare D1 for data persistence, and Cloudflare Workers AI for AI-powered debugging assistance.
 
 ## 1. Technology Stack
-
 - **Edge Runtime:** Cloudflare Workers
 - **API Framework:** Hono.js (TypeScript-based API framework)
 - **Database:** Cloudflare D1 (serverless SQLite)
 - **ORM:** Drizzle ORM for type-safe database operations
-- **AI Integration:** Cloudflare Workers AI (Llama 3.1 8B for debugging assistance)
-- **Music Integration:** Spotify Web API
+- **AI Integration:** Cloudflare Workers AI with Llama 3.1 8B for debugging assistance
+- **GitHub Integration:** GitHub API for repository analysis
 - **MCP Framework:** @modelcontextprotocol/sdk and @hono/mcp
+- **Music Integration:** Spotify Web API
 
 ## 2. Database Schema Design
-
-The database will store user tasks, debugging sessions, focus sessions, and Spotify authentication tokens to provide comprehensive productivity tracking and personalized experiences.
+The database will store user tasks, debugging sessions, focus timer sessions, and Spotify tokens to provide persistence across interactions.
 
 ### 2.1. Tasks Table
-
 - id (INTEGER, Primary Key, Auto Increment)
 - title (TEXT, Not Null)
 - description (TEXT)
-- status (TEXT, Default: 'pending') - Values: 'pending', 'in_progress', 'completed'
-- priority (TEXT, Default: 'medium') - Values: 'low', 'medium', 'high'
-- due_date (TEXT) - ISO date string
-- created_at (TEXT, Default: CURRENT_TIMESTAMP)
-- updated_at (TEXT, Default: CURRENT_TIMESTAMP)
+- status (TEXT, Default 'pending') // 'pending', 'in_progress', 'completed'
+- priority (TEXT, Default 'medium') // 'low', 'medium', 'high'
+- created_at (INTEGER, Not Null) // Unix timestamp
+- updated_at (INTEGER, Not Null) // Unix timestamp
+- due_date (INTEGER) // Unix timestamp, optional
 
 ### 2.2. Debug Sessions Table
-
 - id (INTEGER, Primary Key, Auto Increment)
+- session_id (TEXT, Not Null, Unique)
+- title (TEXT, Not Null)
 - problem_description (TEXT, Not Null)
-- ai_response (TEXT)
-- status (TEXT, Default: 'active') - Values: 'active', 'resolved'
-- created_at (TEXT, Default: CURRENT_TIMESTAMP)
-- updated_at (TEXT, Default: CURRENT_TIMESTAMP)
+- conversation_history (TEXT) // JSON string of messages
+- created_at (INTEGER, Not Null)
+- updated_at (INTEGER, Not Null)
 
 ### 2.3. Focus Sessions Table
-
 - id (INTEGER, Primary Key, Auto Increment)
+- session_id (TEXT, Not Null, Unique)
 - duration_minutes (INTEGER, Not Null)
+- status (TEXT, Default 'active') // 'active', 'paused', 'completed', 'cancelled'
+- start_time (INTEGER, Not Null) // Unix timestamp
+- end_time (INTEGER) // Unix timestamp, set when completed
 - task_description (TEXT)
-- completed (BOOLEAN, Default: false)
-- started_at (TEXT, Default: CURRENT_TIMESTAMP)
-- completed_at (TEXT)
+- created_at (INTEGER, Not Null)
 
-### 2.4. Spotify Tokens Table
-
+### 2.4. Spotify User Tokens Table
 - id (INTEGER, Primary Key, Auto Increment)
-- user_id (TEXT, Not Null, Unique)
+- user_id (TEXT, Not Null, Unique) // Spotify user ID
 - access_token (TEXT, Not Null)
 - refresh_token (TEXT, Not Null)
-- expires_at (TEXT, Not Null)
-- created_at (TEXT, Default: CURRENT_TIMESTAMP)
-- updated_at (TEXT, Default: CURRENT_TIMESTAMP)
+- expires_at (INTEGER, Not Null) // Unix timestamp
+- scope (TEXT, Not Null) // Spotify permissions granted
+- created_at (INTEGER, Not Null)
+- updated_at (INTEGER, Not Null)
 
 ## 3. API Endpoints
 
-The API will be structured into logical groups for task management, debugging assistance, focus sessions, and Spotify integration, with an MCP endpoint for tool communication.
-
 ### 3.1. MCP Server Endpoint
-
-- **POST /mcp**
-  - Description: Main MCP server endpoint handling JSON-RPC requests
-  - Handles all MCP tool calls and resource requests
-  - Uses StreamableHTTPTransport for direct Hono context handling
+- **POST /mcp** - Main MCP server endpoint handling JSON-RPC requests
+- Provides tools for: rubber duck debugging, task management, focus timer, **GitHub analysis**
+- Returns duck-themed responses with encouraging personality
 
 ### 3.2. Task Management Endpoints
+- **POST /api/tasks** - Create a new task with duck-themed confirmation
+- **GET /api/tasks** - List all tasks with duck-themed status messages
+- **PUT /api/tasks/:id** - Update task with encouraging duck response
+- **DELETE /api/tasks/:id** - Delete task with supportive duck message
 
-- **POST /api/tasks**
-  - Description: Create a new task with duck-themed confirmation
-  - Expected Payload:
-    ```json
-    {
-      "title": "Complete project documentation",
-      "description": "Write comprehensive docs",
-      "priority": "high",
-      "due_date": "2024-01-15"
-    }
-    ```
+### 3.3. Rubber Duck Debugging Endpoints
+- **POST /api/debug/sessions** - Start new debugging session with AI-powered duck responses
+- **POST /api/debug/sessions/:sessionId/chat** - Continue debugging conversation with AI assistance
+- **GET /api/debug/sessions/:sessionId** - Retrieve debugging session history
 
-- **GET /api/tasks**
-  - Description: Retrieve all tasks with duck personality responses
-  - Query Params: status, priority, limit, offset
+### 3.4. Focus Timer Endpoints
+- **POST /api/focus/sessions** - Start focus timer with motivational duck message
+- **PUT /api/focus/sessions/:sessionId/pause** - Pause focus session with encouraging message
+- **PUT /api/focus/sessions/:sessionId/resume** - Resume focus session with motivational boost
+- **PUT /api/focus/sessions/:sessionId/complete** - Complete focus session with celebratory duck response
+- **GET /api/focus/sessions/:sessionId/status** - Get current timer status with time remaining
 
-- **PUT /api/tasks/:id**
-  - Description: Update existing task with encouraging duck messages
-  - Expected Payload: Partial task object
+### 3.5. **GitHub Repository Analysis Endpoints (NEW!)**
+- **POST /api/github/analyze** - Analyze GitHub repositories or specific files
+  - **Parameters:** github_url, issue_description (optional), focus_files (optional)
+  - **Returns:** AI-powered code analysis with duck personality
+  - **Features:** 
+    - Analyze entire repositories (finds common files automatically)
+    - Analyze specific files via URL paths
+    - Focus on specific files via focus_files parameter
+    - AI insights with debugging suggestions
 
-- **DELETE /api/tasks/:id**
-  - Description: Delete task with supportive duck farewell
-
-### 3.3. Debug Session Endpoints
-
-- **POST /api/debug**
-  - Description: Start new debugging session with AI assistance
-  - Expected Payload:
-    ```json
-    {
-      "problem_description": "My React component won't re-render when state changes"
-    }
-    ```
-
-- **GET /api/debug/:id**
-  - Description: Retrieve debug session details with duck encouragement
-
-- **PUT /api/debug/:id/resolve**
-  - Description: Mark debug session as resolved with celebratory duck response
-
-### 3.4. Focus Session Endpoints
-
-- **POST /api/focus**
-  - Description: Start new focus session with motivational duck message
-  - Expected Payload:
-    ```json
-    {
-      "duration_minutes": 25,
-      "task_description": "Write API documentation"
-    }
-    ```
-
-- **PUT /api/focus/:id/complete**
-  - Description: Complete focus session with congratulatory duck response
-
-- **GET /api/focus/stats**
-  - Description: Get focus session statistics with encouraging duck insights
-
-### 3.5. Spotify Integration Endpoints
-
-- **GET /api/spotify/auth**
-  - Description: Initiate Spotify OAuth flow with duck-themed instructions
-
-- **POST /api/spotify/callback**
-  - Description: Handle Spotify OAuth callback and store tokens
-
-- **POST /api/spotify/play**
-  - Description: Control Spotify playback with duck commentary
-  - Expected Payload:
-    ```json
-    {
-      "action": "play|pause|next|previous",
-      "playlist_uri": "spotify:playlist:37i9dQZF1DX0XUsuxWHRQd"
-    }
-    ```
-
-- **GET /api/spotify/playlists**
-  - Description: Get user's playlists with duck recommendations
+### 3.6. Spotify Music Control Endpoints
+- **POST /api/spotify/auth** - Initiate Spotify OAuth flow for user authentication
+- **POST /api/spotify/callback** - Handle Spotify OAuth callback and store tokens
+- **GET /api/spotify/search** - Search for productivity playlists and focus music
+- **POST /api/spotify/play** - Start playback with duck-themed confirmation
+- **PUT /api/spotify/pause** - Pause current playback with encouraging message
+- **PUT /api/spotify/resume** - Resume playback with motivational duck response
+- **POST /api/spotify/skip** - Skip to next track with duck commentary
+- **PUT /api/spotify/volume** - Adjust volume with duck-themed feedback
+- **GET /api/spotify/current** - Get currently playing track with duck commentary
 
 ## 4. MCP Tools Implementation
 
-The MCP server will expose the following tools with consistent duck personality:
+### 4.1. rubber_duck_debug
+- **Description:** Start or continue a rubber duck debugging session
+- **Parameters:** problem_description, session_id (optional)
+- **Returns:** AI-powered debugging suggestions with duck personality
 
-### 4.1. Task Management Tools
+### 4.2. manage_tasks
+- **Description:** Create, update, list, or delete tasks
+- **Parameters:** action, task_data, task_id (for updates/deletes)
+- **Returns:** Task information with duck-themed responses
 
-- **create_task**: Create new tasks with duck encouragement
-- **list_tasks**: List tasks with duck-themed status updates
-- **update_task**: Update tasks with motivational duck messages
-- **delete_task**: Delete tasks with supportive duck responses
-- **get_task_stats**: Provide productivity insights with duck wisdom
+### 4.3. focus_timer
+- **Description:** Start, pause, resume, or check focus timer sessions
+- **Parameters:** action, duration_minutes, task_description
+- **Returns:** Timer status with motivational duck messages
 
-### 4.2. Debugging Tools
+### 4.4. spotify_control
+- **Description:** Control Spotify playback and get music recommendations
+- **Parameters:** action, search_query, playlist_uri, volume_percent, mood
+- **Returns:** Playback status and duck-themed music suggestions
 
-- **start_debug_session**: Begin AI-powered debugging with duck support
-- **get_debug_help**: Get AI assistance with encouraging duck commentary
-- **resolve_debug_session**: Mark debugging complete with celebratory duck response
-
-### 4.3. Focus Timer Tools
-
-- **start_focus_session**: Begin focus timer with motivational duck messages
-- **complete_focus_session**: End focus session with congratulatory duck response
-- **get_focus_stats**: Provide focus insights with encouraging duck analysis
-
-### 4.4. Spotify Integration Tools
-
-- **spotify_auth**: Guide through Spotify authentication with duck instructions
-- **control_spotify**: Control music playback with duck commentary
-- **get_playlists**: Retrieve playlists with duck recommendations
-- **create_focus_playlist**: Create productivity playlists with duck curation
+### 4.5. **analyze_github_repo (NEW!)**
+- **Description:** Analyze GitHub repositories or specific files for bugs and improvements
+- **Parameters:** 
+  - github_url (required) - Repository or file URL
+  - issue_description (optional) - Specific issue context
+  - focus_files (optional) - Array of specific file paths to analyze
+- **Returns:** AI-powered code analysis with duck personality and debugging suggestions
+- **Features:**
+  - Supports repository URLs, file URLs, and specific file targeting
+  - Uses Cloudflare Workers AI for intelligent code analysis
+  - Provides step-by-step debugging advice with duck encouragement
+  - Analyzes up to 3-5 files per request for performance
 
 ## 5. Integrations
 
-- **OpenAI API**: GPT-4.1 for intelligent debugging assistance and AI-powered problem solving
-- **Spotify Web API**: Complete music control, playlist management, and user authentication
-- **MCP Protocol**: Full implementation using @modelcontextprotocol/sdk for seamless tool integration
+### 5.1. Cloudflare Workers AI
+- **Model:** Llama 3.1 8B for debugging assistance and code analysis
+- **Features:** Duck personality prompts, code analysis, debugging suggestions
 
-## 6. Duck Personality Guidelines
+### 5.2. **GitHub API Integration (NEW!)**
+- **GitHub Contents API** for fetching repository files
+- **Base64 decoding** for file content processing
+- **URL parsing** for repository, file, and path extraction
+- **Rate limiting** and error handling for API requests
 
-All responses must maintain a consistent, encouraging duck personality:
+### 5.3. Spotify Web API
+- **OAuth 2.0 flow** for secure authentication
+- **Playback control** and playlist management
+- **Token refresh** handling for long-term usage
 
-- Use duck-themed expressions: "Quack-tastic!", "Duck yeah!", "That's absolutely ducky!"
-- Provide supportive, motivational language
-- Include rubber duck debugging references
-- Maintain professional helpfulness while being delightfully duck-themed
-- Celebrate user achievements with enthusiastic duck responses
-- Offer gentle encouragement during challenges
+### 5.4. MCP SDK
+- **Standardized AI assistant integration**
+- **Tool discovery** and execution
+- **HTTP transport** handling
 
-## 7. Environment Configuration
+## 6. Duck Personality Implementation
+All responses maintain a consistent duck personality:
+- Use encouraging, supportive language
+- Include duck-themed expressions ("Quack-tastic!", "Let's dive in!", "You've got this, fellow developer!")
+- Provide gentle guidance and positive reinforcement
+- Use water/pond metaphors when appropriate
+- Maintain professionalism while being friendly and approachable
 
-The application requires the following environment bindings:
+## 7. **GitHub Analysis Features (NEW!)**
 
-- `OPENAI_API_KEY`: OpenAI API authentication
-- `SPOTIFY_CLIENT_ID`: Spotify application client ID
-- `SPOTIFY_CLIENT_SECRET`: Spotify application client secret
-- `SPOTIFY_REDIRECT_URI`: OAuth callback URL
-- `DB`: Cloudflare D1 database binding
+### 7.1. Repository Analysis Modes
+- **Auto-discovery:** Automatically finds and analyzes common files (package.json, src/index.js, etc.)
+- **Specific file:** Analyze individual files via GitHub blob URLs
+- **Focused analysis:** Target specific files using focus_files parameter
+
+### 7.2. AI-Powered Insights
+- **Bug detection:** Identifies potential issues and code smells
+- **Performance suggestions:** Recommends optimizations
+- **Best practices:** Suggests improvements following coding standards
+- **Duck encouragement:** Maintains motivational tone throughout analysis
+
+### 7.3. Supported File Types
+- JavaScript/TypeScript files
+- Package.json and configuration files
+- README and documentation files
+- Common web development files (React, Node.js, etc.)
 
 ## 8. Additional Notes
-
-- All database operations should use Drizzle ORM for type safety
+- All timestamps stored as Unix timestamps for consistency
+- Session IDs generated using crypto.randomUUID()
+- **GitHub API requests** include proper User-Agent headers
+- **No GitHub authentication required** for public repositories
+- Cloudflare Workers AI binding automatically available
+- Spotify Client ID and Secret provided via environment bindings
 - Implement proper error handling with duck-themed error messages
-- Include comprehensive logging for debugging and monitoring
-- Ensure Spotify token refresh logic for long-term authentication
-- Maintain consistent duck personality across all interactions
-- Implement rate limiting for API endpoints to prevent abuse
+- Consider rate limiting for AI-powered debugging and GitHub analysis endpoints
+- All database operations use Drizzle ORM for type safety
+- **GitHub analysis limited to 3-5 files per request** for performance
+- **Base64 decoding** handled for GitHub API responses
 
 ## 9. Further Reading
-
-Take inspiration from the project template here: https://github.com/fiberplane/create-honc-app/tree/main/templates/d1
+Took inspiration from the project template here: https://github.com/fiberplane/create-honc-app/tree/main/templates/d1
