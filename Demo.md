@@ -1,7 +1,3 @@
-<img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/2c0fb562-4086-4fc4-b794-490eb37cc4e4" />
-
-
-
 # 🦆 Duckie Productivity MCP Server
 
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-Quack--tastic!-brightgreen)](https://66bc69efc66f844b6f89c379.fp.dev)  
